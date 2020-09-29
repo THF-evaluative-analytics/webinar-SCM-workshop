@@ -9,6 +9,7 @@ Link to [slides](https://thf-evaluative-analytics.github.io/webinar-SCM-workshop
 
 This project does not use any real data. We created a fake dataset intended to replicate a GP practice panel data set where 40 GP practices from a CCG called "EA1" received an intervention aimed at reducing hospital utilisation and 100 GP practice did not.  
 
+## References
 
 Abadie, A., and Gardeazabal, J. (2003), “The economic costs of conflict: A case study of the Basque country,” American Economic Review, 93, 113–132. https://doi.org/10.1257/000282803321455188.
 
