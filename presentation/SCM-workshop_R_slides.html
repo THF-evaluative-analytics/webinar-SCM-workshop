@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="" xml:lang="">
+  <head>
+    <title>Synthetic Control Methods (SCM) workshop</title>
+    <meta charset="utf-8" />
+    <meta name="author" content="Geraldine Clarke" />
+    <meta name="author" content="Emma Vestesson" />
+    <meta name="author" content="Paris Pariza" />
+    <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
+  </head>
+  <body>
+    <textarea id="source">
+class: center, middle, inverse, title-slide
+
+# Synthetic Control Methods (SCM) workshop
+### Geraldine Clarke
+### Emma Vestesson
+### Paris Pariza
+
+---
+
+
+
+
+
+
+
+# What we will cover today
+
+- Set-up
+
+--
+
+- Introduction
+
+--
+
+- R and rmarkdown refresher
+
+--
+
+- Some theory
+
+--
+
+- Running some R code
+
+
+---
+background-image: url(https://cdn.pixabay.com/photo/2018/06/29/08/15/doodle-3505459_960_720.png)
+
+---
+# Prep
+
+Code and slides available on github https://github.com/THF-evaluative-analytics/webinar-synthetic-controls
+
+We will be using some custom created data so you will need to download the project if you want to follow along
+
+If you don't have Rstudio installed try using rstudio.cloud
+
+Install all packages in the SCM_workshop_for_participants.Rmd (in the R folder)
+
+Go to sli.do and enter the code "IAUsyntheticcontrols"
+
+---
+
+# About the improvement analytics unit
+
+We are an innovative partnership between NHS England and the Health Foundation that provides robust analysis to help the NHS improve care for patients. 
+
+
+Our aim is that our analysis helps the local NHS and its partners identify whether implementation of an initiative is having the  desired effect, or needs to change to succeed. 
+
+
+
+---
+# R refresher
+
+- R is a statistical programming language 
+
+
+- Rstudio is one of the most popular IDEs used with R
+
+--
+
+R Studio projects make it straightforward to divide your work into multiple contexts, each with their own working directory, workspace, history, and source documents. 
+
+This means that:
+
+- The .Rprofile file in the project's main directory is sourced by R.
+- The current working directory is set to the project directory.
+- Previously edited source documents or settings are restored.
+
+---
+# Tidyverse
+- tidyverse is collection of R packages based on tidy data principles.
+- dplyr package allows simple commands for data manipulation (select(), filter(), mutate(), group_by()).
+- pipes (%&gt;%) simplify R code by passing data through functions without nesting. 
+
+---
+
+# Rmarkdown
+
+R Markdown is a file format for making dynamic documents with R and it contains chunks of embedded R code.
+- You can knit the file and you can convert the file into an HTML, PDF, or Microsoft Word file.
+- Use one hashtag, #, to create a header or two, ##, to create a second level header, and so on.
+- To omit the code from the final report, add the argument echo = FALSE inside the {r}. 
+- To avoid evaluating a chunk of R code, add the argument eval = FALSE inside the {r}.
+
+---
+
+# Exploratory data analysis
+
+(0) Open the “project.Rproj”, then the file “workshop_participants.Rmd” and load the libraries required
+
+(1) Read the dataset “df.rds” in R
+“df” is a completely fake data set that we have generated for this workshop and it is intended to replicate GP practice level data where some practices received an intervention aimed at reducing hospital utilisation. 
+
+
+---
+
+# Which variable is **not** in the data set?
+
+a)  `age`
+
+b)  `gender`
+
+c)  `ethnicity`
+
+
+
+---
+
+
+```r
+head(df0) 
+```
+
+```
+##   ccg_name gp_code    fyr fqtr gp_size male edu_3rd age_5 age_15 age_75plus
+## 1      DA1   000FQ 201516   Q1   12773 6221    1587  2132   1653       1096
+## 2      DA1   000FQ 201516   Q2   12727 6195    1581  2103   1646       1103
+## 3      DA1   000FQ 201516   Q3   12700 6178    1577  2096   1624       1122
+## 4      DA1   000FQ 201516   Q4   12656 6142    1569  2092   1599       1122
+## 5      DA1   000FQ 201617   Q1   12671 6160    1570  2100   1585       1116
+## 6      DA1   000FQ 201617   Q2   12692 6160    1572  2111   1575       1116
+##      ch_nb ae_visits
+## 1 146.0000       416
+## 2 146.3333       403
+## 3 146.3333       395
+## 4 142.0000       402
+## 5 144.0000       421
+## 6 135.6667       402
+```
+
+
+---
+# The logic behind the synthetic control method (SCM)
+
+Suppose we have a single unit which has undergone an intervention (treated unit) and some similar units that have not (control units). The SCM using a weighted average of the control units to create a synthetic control. 
+
+The synthetic control is selected so as to mimic the treated unit in the period before the intervention. The idea is then, that, in the post-intervention period, the synthetic control will behave like the treated unit would have done if it had not received the intervention.  
+
+By comparing the treated unit and the synthetic control in the post-intervention period we can get an idea of a treatment effect. 
+
+What if there are multiple treated units? Collapse them into a single treated unit. 
+	
+---
+
+# Examples and methods
+ 
+Please open SCM_workshop_ppt_slides.pptx
+    </textarea>
+<style data-target="print-only">@media screen {.remark-slide-container{display:block;}.remark-slide-scaler{box-shadow:none;}}</style>
+<script src="https://remarkjs.com/downloads/remark-latest.min.js"></script>
+<script>var slideshow = remark.create({
+"highlightStyle": "github",
+"highlightLines": true,
+"countIncrementalSlides": false
+});
+if (window.HTMLWidgets) slideshow.on('afterShowSlide', function (slide) {
+  window.dispatchEvent(new Event('resize'));
+});
+(function(d) {
+  var s = d.createElement("style"), r = d.querySelector(".remark-slide-scaler");
+  if (!r) return;
+  s.type = "text/css"; s.innerHTML = "@page {size: " + r.style.width + " " + r.style.height +"; }";
+  d.head.appendChild(s);
+})(document);
+
+(function(d) {
+  var el = d.getElementsByClassName("remark-slides-area");
+  if (!el) return;
+  var slide, slides = slideshow.getSlides(), els = el[0].children;
+  for (var i = 1; i < slides.length; i++) {
+    slide = slides[i];
+    if (slide.properties.continued === "true" || slide.properties.count === "false") {
+      els[i - 1].className += ' has-continuation';
+    }
+  }
+  var s = d.createElement("style");
+  s.type = "text/css"; s.innerHTML = "@media print { .has-continuation { display: none; } }";
+  d.head.appendChild(s);
+})(document);
+// delete the temporary CSS (for displaying all slides initially) when the user
+// starts to view slides
+(function() {
+  var deleted = false;
+  slideshow.on('beforeShowSlide', function(slide) {
+    if (deleted) return;
+    var sheets = document.styleSheets, node;
+    for (var i = 0; i < sheets.length; i++) {
+      node = sheets[i].ownerNode;
+      if (node.dataset["target"] !== "print-only") continue;
+      node.parentNode.removeChild(node);
+    }
+    deleted = true;
+  });
+})();
+(function() {
+  "use strict"
+  // Replace <script> tags in slides area to make them executable
+  var scripts = document.querySelectorAll(
+    '.remark-slides-area .remark-slide-container script'
+  );
+  if (!scripts.length) return;
+  for (var i = 0; i < scripts.length; i++) {
+    var s = document.createElement('script');
+    var code = document.createTextNode(scripts[i].textContent);
+    s.appendChild(code);
+    var scriptAttrs = scripts[i].attributes;
+    for (var j = 0; j < scriptAttrs.length; j++) {
+      s.setAttribute(scriptAttrs[j].name, scriptAttrs[j].value);
+    }
+    scripts[i].parentElement.replaceChild(s, scripts[i]);
+  }
+})();
+(function() {
+  var links = document.getElementsByTagName('a');
+  for (var i = 0; i < links.length; i++) {
+    if (/^(https?:)?\/\//.test(links[i].getAttribute('href'))) {
+      links[i].target = '_blank';
+    }
+  }
+})();
+// adds .remark-code-has-line-highlighted class to <pre> parent elements
+// of code chunks containing highlighted lines with class .remark-code-line-highlighted
+(function(d) {
+  const hlines = d.querySelectorAll('.remark-code-line-highlighted');
+  const preParents = [];
+  const findPreParent = function(line, p = 0) {
+    if (p > 1) return null; // traverse up no further than grandparent
+    const el = line.parentElement;
+    return el.tagName === "PRE" ? el : findPreParent(el, ++p);
+  };
+
+  for (let line of hlines) {
+    let pre = findPreParent(line);
+    if (pre && !preParents.includes(pre)) preParents.push(pre);
+  }
+  preParents.forEach(p => p.classList.add("remark-code-has-line-highlighted"));
+})(document);</script>
+
+<script>
+slideshow._releaseMath = function(el) {
+  var i, text, code, codes = el.getElementsByTagName('code');
+  for (i = 0; i < codes.length;) {
+    code = codes[i];
+    if (code.parentNode.tagName !== 'PRE' && code.childElementCount === 0) {
+      text = code.textContent;
+      if (/^\\\((.|\s)+\\\)$/.test(text) || /^\\\[(.|\s)+\\\]$/.test(text) ||
+          /^\$\$(.|\s)+\$\$$/.test(text) ||
+          /^\\begin\{([^}]+)\}(.|\s)+\\end\{[^}]+\}$/.test(text)) {
+        code.outerHTML = code.innerHTML;  // remove <code></code>
+        continue;
+      }
+    }
+    i++;
+  }
+};
+slideshow._releaseMath(document);
+</script>
+<!-- dynamically load mathjax for compatibility with self-contained -->
+<script>
+(function () {
+  var script = document.createElement('script');
+  script.type = 'text/javascript';
+  script.src  = 'https://mathjax.rstudio.com/latest/MathJax.js?config=TeX-MML-AM_CHTML';
+  if (location.protocol !== 'file:' && /^https?:/.test(script.src))
+    script.src  = script.src.replace(/^https?:/, '');
+  document.getElementsByTagName('head')[0].appendChild(script);
+})();
+</script>
+  </body>
+</html>

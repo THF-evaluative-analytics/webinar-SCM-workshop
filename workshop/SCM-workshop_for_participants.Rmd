@@ -1,0 +1,213 @@
+---
+title: "Synthetic Control Methods (SCM) workshop"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+##
+
+(0) Load libraries
+
+```{r}
+library(here)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(Synth)
+library(panelView)
+library(skimr)
+library(tableone)
+```
+
+## Load the dataset
+
+(1) Read the dataset in R
+
+```{r}
+df0 <- readRDS(here::here("data", "df.rds"))
+```
+
+df0 is a fake dataset that we have generated for this workshop. It is a longitudinal, or panel,  dataset intended to replicate repeated observations on 140 GP practices (units) over 16 quarters in financial years 2015-16, 2016-17, 2017-18 and 2018-19. 40 of the practices belong to a fake CCG called "EA1" which received a treatment, or intervention, aimed at reducing hospital utilisation e.g. A&E visits. The first 8 quarters record data during the 2 years before the intervention began; the last 8 quarters record data during the two years following the start of the intervention.  Each month aggregate count data for the practice is recorded. Covariate, or predictor, data here includes the registered practice size (`gp_size`), the number of male patients (`male`), numbers by age groupings (`age_5`, `age-15`, `age_75plus`) and the number of available care home beds (`ch_nb`). The outcome variable of interest is  the number of visits to the A&E (`ae_visits`). 
+
+Let's start by looking at the data. 
+
+## Exploratory data analysis 
+
+(2) Look at your data using the `View` package
+Can you split by  pre- and post-intervention periods?
+
+```{r, eval=FALSE}
+
+```
+
+(3) Look at your data using the `skimr` package. The main function is `skim` but you can also combine it with `summary`. 
+
+```{r}
+
+```
+## Prepare data for running synth()
+
+(4) Add useful fields
+
+Add fields to easily distinguish time, treated units and treated times: 
+ - a numeric time (`time`) variable in chronological order combining years and quarters
+ - a flag (`treated_unit`) indicating whether a unit is treated or not
+ - a flag (`treated_time`) indicating whether the quarter is in the post-intervention period (last 8 quarters)
+ - a flag (`intervention`) indicating whether a unit is being treated at this time
+Add a scaled outcome so that outomces are comparable across units:  
+ - `ae_visits_rate` = rate of A&E visits per 10,000 registered population per month
+ 
+```{r}
+
+```
+## Exploratory data analysis 
+
+(5) Look at your data using the `panelView` package. 
+
+(a) Look at the structure of your panel data set in terms of outcome data for treated and untreated units. Use the output to check for any missing data and to ensure that you have the right numbers of time periods, and treated and untreated units. 
+ 
+```{r}
+
+```
+
+(b) Look at the raw outcomes over time for treated and untreated units. Use the scaled rate of A&E visits here so that outcomes are comparable across units. 
+
+```{r}
+
+```
+
+(6) Look at the raw average outputs in treated and control units. 
+
+Write your own function to look at the weighted* average outcome for treated and control units 
+over time. This is useful for sanity check of the data and whether parallel trends might be a viable assumption. 
+
+*Rather than simply averaging the rate of A&E visits calculated at each practice at each time point, we weight these rates by the population size of the practice. This is equivalent to calculating the total number of ae_visits for all treated and untreated units at each time point and dividing by the total number of treated and untreated registered practice population, respectively, at each time point. 
+Does parallel trends look like a reasonable assumption?
+ 
+```{r}
+
+
+```
+
+(7) Use the `CreateTableOne` package to compare average values of predictors between treated and untreated units in the pre-intervention period. 
+Create a nice table with descriptive statistics for the predictor variables in treated vs. untreated units in the pre-intervention period. 
+
+```{r}
+
+```
+
+## Difference-in-Differences Regression
+
+(8) Since parallel trends looks like a reasonable assumption in the pre-intervention period, let's run a difference-in-difference regression model. The coefficient for difference-in-differences is intervention = treated_unit*treated_time. This represents the impact of the intervention in the treated units during the post-intervention period. 
+
+```{r}
+
+```
+The effect is significant p < 10e-16 with the treatment reducing the monthly rate of A&E visits by 41 visits per 10,000 people per month. 
+
+## Prepare to run synth(): Collapse the treated units
+
+(9) To run the original synthetic control model by Abadie et al., we must first collapse the treated units at each time point into the equivalent of a single average treated unit. Since our variables are recorded as counts, we can do this by taking the mean of each variable across all units at each time point. 
+- Give the collapsed unit a unique `gp_code` e.g. 99999 - so that we can refer to it later. 
+- Make sure to recreate the rate of A&E visits per 10,000 population size in the collapsed dataset. 
+Take a look at a panel view of the collapsed data
+
+```{r}
+
+```
+
+NOTE: although` ccg_name`, `yr_qtr`, `treated_unit`, `treated_time` and `intervention` do not vary for the treated units by the grouping variable `time`, it is convenient to include them in the grouping statement so that they appear in the final collapsed dataset. 
+
+Replace XXXXXXXXXXXX by the count variables that you want to include as predictors in your regression. 
+## Prepare to run `synth()`: Create data objects
+
+(10) Read about the `dataprep` package which prepares the data for input to `synth()`. 
+`dataprep` takes a standard panel datset and produces a list of data objects necessary for running synth. `dataprep` needs to know which predictor variables (`predictors`) you want included and how you want these aggregated across units (`predictors.op`). It also allows you to tell it if you want certain predictors handled in a different way (`special.predictors`). Note that `synth` refers to the outcomes in the pre-intervention period as predictors. 
+
+`dataprep` creates 4 objects:
+ - `X1`: a p x 1 matrix of p predictors, including special predictors, for the 1 treated unit.  
+ - `X0`: a p x 100 matrix of p predictors, including special predictors, for the 100 untreated units. 
+ - `Z1`: a 8 x 1 matrix of the outcome for the 8 pre-intervention periods, for the 1 treated unit
+ - `Z0`: a 8 x 100 matrix of the outcome for the 8-pre-intervention periods, for the 100 untreated units
+
+```{r}
+help(dataprep)
+```
+
+(11) Run `dataprep()` for the outcome rate of A&E visits per 10,000 per month. 
+- Create a variable which lists the untreated units. This will be supplied as argument `treatment.identifier` to dataprep() 
+- dataprep() requires that the unit (here GP practices) names are numeric. Our units are currently identified by `gp_code` so we need to create a new variable which is a numeric version of the `gp_code`. Call this `gp_num`. This will be supplied as argument `unit.variable` to dataprep().
+- Define `special.predictors` for the outcome in the pre-intervention period that average the outcomes over successive quarters (e.g. average of Jan-Mar 2015 and Jan-Mar 2016) to reduce the number of pre-intervention outcome values (lags) included in the model, whilst preserving seasonality. 
+
+```{r}
+
+```
+
+## Run `synth()`
+(12) Let's run a synthetic control analysis. Takes a while to run, so save the output once completed so you can come back to it. 
+
+```{r, eval=F}
+help(synth)
+
+```
+
+##Review synth outputs
+
+(13) Use synth.tab() to create tables summarising the result of the run of the synthetic control method. 
+- Look at the pre-intervention predictor comparison to see how well the treated and synthetic areas compare in the pre-intervention period
+- weights assigned - how much weight does the unit with largest weight contribute?
+
+```{r}
+
+```
+
+## Plot synth outputs
+
+(14) The synth package provide convenient plotting functions:
+- treated and synthetic control trajectories
+- gap plots showing difference between treated and synthetic control trajectories
+Or, can you make your own plot?
+
+```{r}
+
+```
+
+## Calculate the average treatment effect on the treated (ATT)
+(15) Calculate the ATT
+
+```{r}
+
+
+```
+
+## Calculate a p-value for inference - significance of results. 
+
+(16) Run placebo tests 
+Write a loop which repeats the process above using only the untreated units where 40 are randomly selected each time as 'treated' units each time. but replaces the 40 treated units each time with a randomly selected set taken from the untreated units. 
+
+NOTE: Synth() takes a long time to run when using the 'V' step. This is a pre-step that weights the predictors according to their ability to predict the outcome in the pre-intervention period. We skip this step in the permutations by supplying synth() with a `custom.v` which we set to be the same as the V matrix calculated for the original run. 
+
+Allow for the fact that Synth() may not be able to find a solution for some combinations of units. Use `try()` so that you can control errors if `synth()` does not work. 
+
+```{r, eval=FALSE}
+
+```
+
+(17) Estimate p-value from placebo outputs
+
+Calculate average ATT for each permutation and compare to original to estimate p-value
+```{r, eval=F}
+
+```
+
+(18) Plot placebo regions 
+
+```{r, eval=F}
+
+```
+Notice from this plot that there is a very low probability of obtaining a gap as large as that seen for the treated region. 
+```
+

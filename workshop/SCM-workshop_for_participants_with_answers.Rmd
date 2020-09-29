@@ -1,0 +1,569 @@
+---
+title: "Synthetic Control Methods (SCM) workshop (with answers)"
+output:
+  html_document:
+    df_print: paged
+  html_notebook: default
+  pdf_document: default
+---
+
+##
+
+(0) Load libraries
+
+```{r}
+library(here)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(Synth)
+library(panelView)
+library(skimr)
+library(tableone)
+```
+
+## Load the dataset
+
+(1) Read the dataset in R
+
+```{r}
+df0 <- readRDS(here::here("data", "df.rds"))
+```
+
+df0 is a fake dataset that we have generated for this workshop. It is a longitudinal, or panel,  dataset intended to replicate repeated observations on 140 GP practices (units) over 16 quarters in financial years 2015-16, 2016-17, 2017-18 and 2018-19. 40 of the practices belong to a fake CCG called "EA1" which received a treatment, or intervention, aimed at reducing hospital utilisation e.g. A&E visits. The first 8 quarters record data during the 2 years before the intervention began; the last 8 quarters record data during the two years following the start of the intervention.  Each month aggregate count data for the practice is recorded. Covariate, or predictor, data here includes the registered practice size (`gp_size`), the number of male patients (`male`), numbers by age groupings (`age_5`, `age-15`, `age_75plus`) and the number of available care home beds (`ch_nb`). The outcome variable of interest is  the number of visits to the A&E (`ae_visits`). 
+
+Let's start by looking at the data. 
+
+## Exploratory data analysis 
+
+(2) Look at your data using the `View` package
+Can you split by  pre- and post-intervention periods?
+
+```{r, eval=FALSE}
+View(df0)
+
+df0 %>%
+  filter(fyr %in% c("201516", "201617")) %>%
+  View("pre-intervention only")
+
+df0 %>%
+  filter(fyr %in% c("201718", "201819")) %>%
+  View("post-intervention only")
+```
+
+(3) Look at your data using the `skimr` package. The main function is `skim` but you can also combine it with `summary`. 
+
+```{r}
+skim(df0)
+skim(df0) %>% 
+  summary()
+```
+## Prepare data for running synth()
+
+(4) Add useful fields
+
+Add fields to easily distinguish time, treated units and treated times: 
+ - a numeric time (`time`) variable in chronological order combining years and quarters
+ - a flag (`treated_unit`) indicating whether a unit is treated or not
+ - a flag (`treated_time`) indicating whether the quarter is in the post-intervention period (last 8 quarters)
+ - a flag (`intervention`) indicating whether a unit is being treated at this time
+Add a scaled outcome so that outomces are comparable across units:  
+ - `ae_visits_rate` = rate of A&E visits per 10,000 registered population per month
+ 
+```{r}
+treated_ccg = "EA1"
+df1 = df0 %>%
+  unite("yr_qtr", c(fyr, fqtr)) %>%
+  mutate(
+    treated_unit = ifelse(ccg_name == treated_ccg, 1, 0),
+    time = match(yr_qtr, sort(unique(yr_qtr))),
+    treated_time = ifelse(time > 8, 1, 0),
+    intervention = treated_unit * treated_time,
+    ae_visits_rate = ae_visits / gp_size * 10000
+  ) %>%
+  as.data.frame()
+```
+## Exploratory data analysis 
+
+(5) Look at your data using the `panelView` package. 
+
+(a) Look at the structure of your panel data set in terms of outcome data for treated and untreated units. Use the output to check for any missing data and to ensure that you have the right numbers of time periods, and treated and untreated units. 
+ 
+```{r}
+panelView(ae_visits ~ intervention, dat=df1, index=c("gp_code", "time"))
+```
+
+(b) Look at the raw outcomes over time for treated and untreated units. Use the scaled rate of A&E visits here so that outcomes are comparable across units. 
+
+```{r}
+panelView(ae_visits_rate ~ intervention, data=df1, index=c("gp_code", "time"), type="raw")
+```
+
+(6) Look at the raw average outputs in treated and control units. 
+
+Write your own function to look at the weighted* average outcome for treated and control units 
+over time. This is useful for sanity check of the data and whether parallel trends might be a viable assumption. 
+
+*Rather than simply averaging the rate of A&E visits calculated at each practice at each time point, we weight these rates by the population size of the practice. This is equivalent to calculating the total number of ae_visits for all treated and untreated units at each time point and dividing by the total number of treated and untreated registered practice population, respectively, at each time point. 
+Does parallel trends look like a reasonable assumption?
+ 
+```{r}
+
+Y_trt <- df1 %>%
+  filter(treated_unit == 1) %>%
+  group_by(time) %>%
+  summarise_at(vars("gp_size", "ae_visits"), sum) %>%
+  mutate(ae_visits_wt_rate = (ae_visits / gp_size) * 10000) %>%
+  as.data.frame
+
+Y_untrt <- df1 %>%
+  filter(treated_unit == 0) %>%
+  group_by(time) %>%
+  summarise_at(vars("gp_size", "ae_visits"), sum) %>%
+  mutate(ae_visits_wt_rate = (ae_visits / gp_size) * 10000) %>%
+  as.data.frame
+
+{
+  plot(
+    Y_trt$time,
+    Y_trt$ae_visits_wt_rate,
+    type = "n",
+    col = 1,
+    lwd = 2,
+    lty = 1,
+    ylim = c(300, 400),
+    xlab = "Study Quarter",
+    ylab = "Rate of A&E vists/10,000",
+    axes = F,
+    main = "A. Average Outcome - Treated and Untreated"
+  )
+  axis(side = 1, at = c(1:8) * 2)
+  abline(v = 8, lty = 2)
+  lines(
+    Y_trt$time,
+    Y_trt$ae_visits_wt_rate,
+    col = 2,
+    lwd = 2,
+    lty = 1
+  )
+  lines(
+    Y_untrt$time,
+    Y_untrt$ae_visits_wt_rate,
+    col = 1,
+    lwd = 2,
+    lty = 1
+  )
+  legend(
+    "topright",
+    legend = c("Treated", "Untreated"),
+    col = c(2, 1),
+    lty = c(1, 1),
+    cex = 0.9
+  )
+}
+```
+
+(7) Use the `CreateTableOne` package to compare average values of predictors between treated and untreated units in the pre-intervention period. 
+Create a nice table with descriptive statistics for the predictor variables in treated vs. untreated units in the pre-intervention period. 
+
+```{r}
+predictor_vars = c("gp_size",
+                   "male",
+                   "edu_3rd",
+                   "age_5",
+                   "age_15",
+                   "age_75plus",
+                   "ch_nb")
+
+df1_pre = df1 %>%
+  filter(treated_time == 0) %>%
+  as.data.frame()
+
+table1_bm <-
+  CreateTableOne(data = df1_pre,
+                 vars = predictor_vars ,
+                 strata = "treated_unit")
+
+print(table1_bm)
+# only run this if you want to save the table in a .csv file
+print(
+  table1_bm,
+  quote = FALSE,
+  noSpaces = TRUE,
+  printToggle = FALSE
+) %>%
+  write.csv(here::here("outputs", "table1_bm.csv"))
+```
+
+## Difference-in-Differences Regression
+
+(8) Since parallel trends looks like a reasonable assumption in the pre-intervention period, let's run a difference-in-difference regression model. The coefficient for difference-in-differences is intervention = treated_unit*treated_time. This represents the impact of the intervention in the treated units during the post-intervention period. 
+
+```{r}
+fmla_did <-
+  as.formula(paste("ae_visits_rate", paste(
+    c("treated_unit*treated_time", predictor_vars), collapse = " + "
+  ), sep = "~"))
+
+did_reg <- lm(fmla_did, data = df1)
+
+did_reg_tidy <-
+  broom::tidy(did_reg, conf.int = TRUE) %>% as.data.frame
+
+print(did_reg_tidy)
+```
+The effect is significant p < 10e-16 with the treatment reducing the monthly rate of A&E visits by 41 visits per 10,000 people per month. 
+
+## Prepare to run synth(): Collapse the treated units
+
+(9) To run the original synthetic control model by Abadie et al., we must first collapse the treated units at each time point into the equivalent of a single average treated unit. Since our variables are recorded as counts, we can do this by taking the mean of each variable across all units at each time point. 
+- Give the collapsed unit a unique `gp_code` e.g. 99999 - so that we can refer to it later. 
+- Make sure to recreate the rate of A&E visits per 10,000 population size in the collapsed dataset. 
+Take a look at a panel view of the collapsed data
+
+```{r}
+outcome_vars = c("ae_visits")
+
+df1_trt = df1 %>%
+  filter(treated_unit == 1) %>%
+  group_by(ccg_name,
+           yr_qtr,
+           time,
+           treated_unit,
+           treated_time,
+           intervention) %>%
+  summarise_at(vars(all_of(predictor_vars), all_of(outcome_vars)), mean) %>%
+  mutate(gp_code = "99999",
+         ae_visits_rate = ae_visits / gp_size * 10000) %>%
+  as.data.frame
+
+df1_untrt = df1 %>%
+  filter(treated_unit == 0) %>%
+  dplyr::select(colnames(df1_trt)) %>%
+  as.data.frame
+
+df2 = df1_trt %>%
+  bind_rows(df1_untrt) %>%
+  as.data.frame()
+
+panelView(ae_visits ~ intervention,
+          dat = df2,
+          index = c("gp_code", "time"))
+```
+
+NOTE: although` ccg_name`, `yr_qtr`, `treated_unit`, `treated_time` and `intervention` do not vary for the treated units by the grouping variable `time`, it is convenient to include them in the grouping statement so that they appear in the final collapsed dataset. 
+
+Replace XXXXXXXXXXXX by the count variables that you want to include as predictors in your regression. 
+## Prepare to run `synth()`: Create data objects
+
+(10) Read about the `dataprep` package which prepares the data for input to `synth()`. 
+`dataprep` takes a standard panel datset and produces a list of data objects necessary for running synth. `dataprep` needs to know which predictor variables (`predictors`) you want included and how you want these aggregated across units (`predictors.op`). It also allows you to tell it if you want certain predictors handled in a different way (`special.predictors`). Note that `synth` refers to the outcomes in the pre-intervention period as predictors. 
+
+`dataprep` creates 4 objects:
+ - `X1`: a p x 1 matrix of p predictors, including special predictors, for the 1 treated unit.  
+ - `X0`: a p x 100 matrix of p predictors, including special predictors, for the 100 untreated units. 
+ - `Z1`: a 8 x 1 matrix of the outcome for the 8 pre-intervention periods, for the 1 treated unit
+ - `Z0`: a 8 x 100 matrix of the outcome for the 8-pre-intervention periods, for the 100 untreated units
+
+```{r}
+help(dataprep)
+```
+
+(11) Run `dataprep()` for the outcome rate of A&E visits per 10,000 per month. 
+- Create a variable which lists the untreated units. This will be supplied as argument `treatment.identifier` to dataprep() 
+- dataprep() requires that the unit (here GP practices) names are numeric. Our units are currently identified by `gp_code` so we need to create a new variable which is a numeric version of the `gp_code`. Call this `gp_num`. This will be supplied as argument `unit.variable` to dataprep().
+- Define `special.predictors` for the outcome in the pre-intervention period that average the outcomes over successive quarters (e.g. average of Jan-Mar 2015 and Jan-Mar 2016) to reduce the number of pre-intervention outcome values (lags) included in the model, whilst preserving seasonality. 
+
+```{r}
+df3 = df2 %>%
+  mutate(gp_num = as.numeric(factor(gp_code))) %>%
+  as.data.frame()
+
+untreated_units = sort(unique(df3[which(df3$treated_unit == 0), ]$gp_num))
+
+dataprep_out = dataprep(
+  foo = df3,
+  predictors = predictor_vars,
+  predictors.op = "mean",
+  time.predictors.prior = 1:8,
+  special.predictors = list(
+    list("ae_visits_rate", c(1, 5), "mean"),
+    list("ae_visits_rate", c(2, 6), "mean"),
+    list("ae_visits_rate", c(3, 7), "mean"),
+    list("ae_visits_rate", c(4, 8), "mean")
+  ),
+  dependent = "ae_visits_rate",
+  unit.variable = "gp_num",
+  time.variable = "time",
+  treatment.identifier = 101,
+  controls.identifier = untreated_units,
+  time.optimize.ssr = c(1:8),
+  time.plot = 1:16
+)
+```
+
+## Run `synth()`
+(12) Let's run a synthetic control analysis. Takes a while to run, so save the output once completed so you can come back to it. 
+
+```{r, eval=F}
+help(synth)
+#synth_out <- synth(data.prep.obj = dataprep_out, method = "BFGS")
+
+#if you want to save the output:
+save("synth_out", file = here::here("outputs", "synth_out"))
+
+#if you want to re-load the output:
+```
+```{r}
+load(file=here::here("outputs", "synth_out"))
+```
+
+##Review synth outputs
+
+(13) Use synth.tab() to create tables summarising the result of the run of the synthetic control method. 
+- Look at the pre-intervention predictor comparison to see how well the treated and synthetic areas compare in the pre-intervention period
+- weights assigned - how much weight does the unit with largest weight contribute?
+
+```{r}
+synth.tables = synth.tab(dataprep.res = dataprep_out, synth.res=synth_out)
+
+# Pre-intervention predictor comparison
+synth.tables$tab.pred
+
+# Weights assigned
+synth.tables$tab.w
+
+#unit 46 contributes 25% to the synthetic control. 
+synth.tables$tab.w[which.max(synth.tables$tab.w$w.weights), ]
+```
+
+## Plot synth outputs
+
+(14) The synth package provide convenient plotting functions:
+- treated and synthetic control trajectories
+- gap plots showing difference between treated and synthetic control trajectories
+Or, can you make your own plot?
+
+```{r}
+
+#Treated and synthetic control trajectories
+path.plot(
+  synth.res = synth_out,
+  dataprep.res = dataprep_out,
+  tr.intake = 8,
+  Ylab = "Rate of A&E visits/10,000",
+  Xlab = "Study Quarter",
+  Ylim = c(300, 400),
+  Main = "B. Average Outcome - Treated and Synthetic"
+)
+
+#Difference between treated and synthetic control trajectories
+gaps.plot(
+  synth.res = synth_out,
+  dataprep.res = dataprep_out,
+  Ylab = "Gap in rate of A&E visits/10,000",
+  Xlab = "Study Quarter",
+  Ylim = c(-50, 50),
+  Main = "C. Difference - Treated and Synthetic"
+)
+abline(v = 8, lty = 3, lwd = 2)
+
+#Your own plot of treated and synthetic control trajectories using the outputted weights
+#First create the synthetic control trajectory using the weights output from synth():
+SC_weights = synth_out$solution.w
+Y_SC <- df3 %>%
+  filter(treated_unit == 0) %>%
+  group_by(time) %>%
+  summarise_at(vars("ae_visits_rate"), 
+               list(ae_visits_wt_rate =  ~ sum(. *SC_weights))) %>%
+  as.data.frame
+
+{
+  plot(
+    Y_trt$time,
+    Y_trt$ae_visits_wt_rate,
+    type = "l",
+    col = 2,
+    lwd = 2,
+    lty = 1,
+    ylim = c(300, 400),
+    xlab = "",
+    ylab = "Rate of A&E visits/10,000",
+    axes = F,
+    main = "Average Outcome"
+  )
+  axis(side = 1,
+       at = c(1:8) * 2,
+       labels = paste0("Q", c(1:8) * 2))
+  axis(side = 2)
+  abline(v = 8, lty = 2)
+  lines(
+    Y_SC$time,
+    Y_SC$ae_visits_wt_rate,
+    col = 1,
+    lwd = 2,
+    lty = 2
+  )
+  legend(
+    "topright",
+    legend = c("Treated", "Synthetic"),
+    col = c(2, 1),
+    lty = c(1, 2),
+    cex = 0.9
+  )
+}
+```
+
+## Calculate the average treatment effect on the treated (ATT)
+(15) Calculate the ATT
+
+```{r}
+gaps <-
+  dataprep_out$Y1plot - (dataprep_out$Y0plot %*% synth_out$solution.w)
+ATT = gaps[9:16]
+avg_ATT = mean(ATT)
+print(paste0("ATT = ", round(avg_ATT, 3)))
+##b. OR..Calculated otherwise:
+ATT = Y_trt$ae_visits_wt_rate[9:16] - Y_SC$ae_visits_wt_rate[9:16]
+avg_ATT = mean(ATT)
+print(paste0("ATT = ", round(avg_ATT, 3)))
+
+```
+
+## Calculate a p-value for inference - significance of results. 
+
+(16) Run placebo tests 
+Write a loop which repeats the process above using only the untreated units where 40 are randomly selected each time as 'treated' units each time. but replaces the 40 treated units each time with a randomly selected set taken from the untreated units. 
+
+NOTE: Synth() takes a long time to run when using the 'V' step. This is a pre-step that weights the predictors according to their ability to predict the outcome in the pre-intervention period. We skip this step in the permutations by supplying synth() with a `custom.v` which we set to be the same as the V matrix calculated for the original run. 
+
+Allow for the fact that Synth() may not be able to find a solution for some combinations of units. Use `try()` so that you can control errors if `synth()` does not work. 
+
+```{r, eval=FALSE}
+#Number of permutations to run:
+Pmax = 110
+#number of permutations you are willing to try in total
+P = 100
+#number of permutations you want to have successfully completed at the end
+
+#Save arrays to store estimates of treatment and SC for each permutation
+Y_trt_out = Y_SC_out = array(NA, dim = c(16, P))
+p.ok = 1
+for (p in c(99:Pmax)) {
+  while (p.ok <= P) {
+    ##Select only the untreated units. From these,  randomly select 40 to be new 'treated' units. Recreate the intervention variable - a flag indicating a treated unit in a treated time.
+    df3_p = df3 %>%
+      filter(treated_unit == 0) %>%
+      mutate(
+        treated_unit = ifelse(gp_num %in% sample(c(1:100), 40), 1, 0),
+        intervention = treated_unit * treated_time
+      ) %>%
+      as.data.frame()
+    
+    ##Collapse the 'treated' units into a single treated unit
+    df3_p_trt = df3_p %>%
+      filter(treated_unit == 1) %>%
+      group_by(yr_qtr, time, treated_unit, treated_time, intervention) %>%
+      summarise_at(vars(all_of(predictor_vars), all_of(outcome_vars)), mean) %>%
+      mutate(gp_code = "99999",
+             ae_visits_rate = ae_visits / gp_size * 10000) %>%
+      as.data.frame
+    
+    ##Extract the untreated units
+    df3_p_untrt = df3_p %>%
+      filter(treated_unit == 0) %>%
+      dplyr::select(colnames(df3_p_trt)) %>%
+      as.data.frame
+    
+    ##Combine the treated and untreated units.
+    df4_p = df3_p_trt %>%
+      bind_rows(df3_p_untrt) %>%
+      mutate(gp_num = as.numeric(factor(gp_code))) %>%
+      as.data.frame()
+    
+    untreated_units_p = sort(unique(df4_p[which(df4_p$treated_unit == 0), ]$gp_num))
+    
+    ##Run Synth
+    dataprep_out_p = dataprep(
+      foo = df4_p,
+      predictors = predictor_vars,
+      predictors.op = "mean",
+      time.predictors.prior = 1:8,
+      special.predictors = list(
+        list("ae_visits_rate", c(1, 5), "mean"),
+        list("ae_visits_rate", c(2, 6), "mean"),
+        list("ae_visits_rate", c(3, 7), "mean"),
+        list("ae_visits_rate", c(4, 8), "mean")
+      ),
+      dependent = "ae_visits_rate",
+      unit.variable = "gp_num",
+      time.variable = "time",
+      treatment.identifier = 61,
+      controls.identifier = untreated_units_p,
+      time.optimize.ssr = c(1:8),
+      time.plot = 1:16
+    )
+    
+    synth_out_p <-
+      try(synth(
+        data.prep.obj = dataprep_out_p,
+        method = "BFGS",
+        custom.v = as.numeric(synth_out$solution.v)
+      ),
+      silent = T)
+    
+    #Process Synth output and save results
+    
+    if (!inherits(synth_out_p, "try-error")) {
+      SC_weights_p = synth_out_p$solution.w
+      Y_SC_p <- df4_p %>%
+        filter(treated_unit == 0) %>%
+        group_by(time) %>%
+        summarise_at(vars("ae_visits_rate"), 
+                     list(ae_visits_wt_rate =  ~ sum(. * SC_weights_p))) %>%
+        as.data.frame
+      
+      Y_trt_out[, p.ok] = df3_p_trt$ae_visits_rate
+      Y_SC_out[, p.ok] = Y_SC_p$ae_visits_wt_rate
+      p.ok = p.ok + 1
+    }
+    
+  }
+}
+```
+
+(17) Estimate p-value from placebo outputs
+
+Calculate average ATT for each permutation and compare to original to estimate p-value
+```{r, eval=F}
+gaps_p = Y_trt_out - Y_SC_out
+
+avg_ATT_p = apply(gaps_p[9:16, ], 2, mean)
+ATT_pvalue = length(which(avg_ATT_p < avg_ATT))
+print(ATT_pvalue)
+```
+
+(18) Plot placebo regions 
+
+```{r, eval=F}
+{
+  gaps.plot(
+    synth.res = synth_out,
+    dataprep.res = dataprep_out,
+    Ylab = "E. Gap in rate of A&E visits/10,000",
+    Xlab = "Study Quarter",
+    Ylim = c(-50, 50),
+    Main = "Difference - Placebos"
+  )
+  
+  for (p in 1:P) {
+    lines(c(1:16), gaps_p[, p], col = "grey")
+  }
+  abline(h = 0, lty = 2, lwd = 2)
+  abline(v = 8, lty = 3, lwd = 2)
+  lines(c(1:16), gaps, lwd = 2)
+}
+```
+Notice from this plot that there is a very low probability of obtaining a gap as large as that seen for the treated region. 
+```
+

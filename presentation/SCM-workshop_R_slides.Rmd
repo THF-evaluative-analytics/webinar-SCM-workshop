@@ -1,0 +1,176 @@
+---
+title: "Synthetic Control Methods (SCM) workshop"
+subtitle: ""  
+author: 
+  - "Geraldine Clarke"
+  - "Emma Vestesson"
+  - "Paris Pariza"
+date: ''
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    css: xaringan-themer.css
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+
+library(here)
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(Synth)
+library(panelView)
+library(skimr)
+library(tableone)
+library(xaringan)
+library(xaringanthemer)
+library(showtext)
+df0 <- readRDS(here::here("data", "df.rds"))
+```
+
+```{r xaringan-themer, include=FALSE, warning=FALSE}
+library(xaringanthemer)
+
+
+style_duo_accent(
+  primary_color = "#DD0031",
+  secondary_color = "#7EBFDA",
+  inverse_header_color = "#744284",
+)
+```
+
+
+# What we will cover today
+
+- Set-up
+
+--
+
+- Introduction
+
+--
+
+- R and rmarkdown refresher
+
+--
+
+- Some theory
+
+--
+
+- Running some R code
+
+
+---
+background-image: url(https://cdn.pixabay.com/photo/2018/06/29/08/15/doodle-3505459_960_720.png)
+
+---
+# Prep
+
+Code and slides available on github https://github.com/THF-evaluative-analytics/webinar-synthetic-controls
+
+We will be using some custom created data so you will need to download the project if you want to follow along
+
+If you don't have Rstudio installed try using rstudio.cloud
+
+Install all packages in the SCM_workshop_for_participants.Rmd (in the R folder)
+
+Go to sli.do and enter the code "IAUsyntheticcontrols"
+
+---
+
+# About the improvement analytics unit
+
+We are an innovative partnership between NHS England and the Health Foundation that provides robust analysis to help the NHS improve care for patients. 
+
+
+Our aim is that our analysis helps the local NHS and its partners identify whether implementation of an initiative is having the  desired effect, or needs to change to succeed. 
+
+
+
+---
+# R refresher
+
+- R is a statistical programming language 
+
+
+- Rstudio is one of the most popular IDEs used with R
+
+--
+
+R Studio projects make it straightforward to divide your work into multiple contexts, each with their own working directory, workspace, history, and source documents. 
+
+This means that:
+
+- The .Rprofile file in the project's main directory is sourced by R.
+- The current working directory is set to the project directory.
+- Previously edited source documents or settings are restored.
+
+---
+# Tidyverse
+- tidyverse is collection of R packages based on tidy data principles.
+- dplyr package allows simple commands for data manipulation (select(), filter(), mutate(), group_by()).
+- pipes (%>%) simplify R code by passing data through functions without nesting. 
+
+---
+
+# Rmarkdown
+
+R Markdown is a file format for making dynamic documents with R and it contains chunks of embedded R code.
+- You can knit the file and you can convert the file into an HTML, PDF, or Microsoft Word file.
+- Use one hashtag, #, to create a header or two, ##, to create a second level header, and so on.
+- To omit the code from the final report, add the argument echo = FALSE inside the {r}. 
+- To avoid evaluating a chunk of R code, add the argument eval = FALSE inside the {r}.
+
+---
+
+# Exploratory data analysis
+
+(0) Open the “project.Rproj”, then the file “workshop_participants.Rmd” and load the libraries required
+
+(1) Read the dataset “df.rds” in R
+“df” is a completely fake data set that we have generated for this workshop and it is intended to replicate GP practice level data where some practices received an intervention aimed at reducing hospital utilisation. 
+
+
+---
+
+# Which variable is **not** in the data set?
+
+a)  `age`
+
+b)  `gender`
+
+c)  `ethnicity`
+
+
+
+---
+
+```{r data-summary}
+head(df0) 
+
+```
+
+
+---
+# The logic behind the synthetic control method (SCM)
+
+Suppose we have a single unit which has undergone an intervention (treated unit) and some similar units that have not (control units). The SCM using a weighted average of the control units to create a synthetic control. 
+
+The synthetic control is selected so as to mimic the treated unit in the period before the intervention. The idea is then, that, in the post-intervention period, the synthetic control will behave like the treated unit would have done if it had not received the intervention.  
+
+By comparing the treated unit and the synthetic control in the post-intervention period we can get an idea of a treatment effect. 
+
+What if there are multiple treated units? Collapse them into a single treated unit. 
+	
+---
+
+# Examples and methods
+ 
+Please open SCM_workshop_ppt_slides.pptx
