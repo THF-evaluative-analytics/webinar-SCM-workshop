@@ -2,7 +2,7 @@
 
 Here you can find all resources for the IAU workshop on an introduction to synthetic control methods and running a synthetic control analysis in R. This workshop aims to teach the basic principles of the original synthetic control method (Abadie and Gardeazabal  2003; Abadie et al. 2010) and how to run a synthetic control analysis to estimate the impact of an intervention on one or more treated units e.g. a GP practice. In this workshop we also run some introductory data checks and produce descriptive statistics to understand the structure of the fake dataset provided.
 
-Link to [slides](https://thf-evaluative-analytics.github.io/webinar-SCM-workshop/SCM-workshop_R_slides.html#2)
+Link to [slides](https://thf-evaluative-analytics.github.io/webinar-SCM-workshop/SCM-workshop_R_slides.html#1)
 
 ## Workshop instructions
 
