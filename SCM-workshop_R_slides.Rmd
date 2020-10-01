@@ -5,6 +5,7 @@ author:
   - "Geraldine Clarke"
   - "Emma Vestesson"
   - "Paris Pariza"
+  - "Stefano Conti"
 date: ''
 output:
   xaringan::moon_reader:
@@ -127,36 +128,6 @@ R Markdown is a file format for making dynamic documents with R and it contains 
 
 ---
 
-# Exploratory data analysis
-
-(0) Open the “SCM-workshop.Rproj”, then the file “/workshop/SCM-workshop_for_participants.Rmd” and load the libraries required
-
-(1) Read the dataset “df.rds” in R
-“df” is a completely fake data set that we have generated for this workshop and it is intended to replicate GP practice level data where some practices received an intervention aimed at reducing hospital utilisation. 
-
-
----
-
-# Which variable is **not** in the data set?
-
-a)  `age`
-
-b)  `gender`
-
-c)  `ethnicity`
-
-
-
----
-
-```{r data-summary}
-
-head(df0) 
-
-```
-
-
----
 # The logic behind the synthetic control method (SCM)
 
 Suppose we have a single unit which has undergone an intervention (treated unit) and some similar units that have not (control units). The SCM using a weighted average of the control units to create a synthetic control. 
