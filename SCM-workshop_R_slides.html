@@ -6,6 +6,7 @@
     <meta name="author" content="Geraldine Clarke" />
     <meta name="author" content="Emma Vestesson" />
     <meta name="author" content="Paris Pariza" />
+    <meta name="author" content="Stefano Conti" />
     <link rel="stylesheet" href="xaringan-themer.css" type="text/css" />
   </head>
   <body>
@@ -16,6 +17,7 @@ class: center, middle, inverse, title-slide
 ### Geraldine Clarke
 ### Emma Vestesson
 ### Paris Pariza
+### Stefano Conti
 
 ---
 
@@ -102,58 +104,13 @@ This means that:
 R Markdown is a file format for making dynamic documents with R and it contains chunks of embedded R code.
 - You can knit the file and you can convert the file into an HTML, PDF, or Microsoft Word file.
 - Use one hashtag, #, to create a header or two, ##, to create a second level header, and so on.
+- To embed a chunk of R code, surround it with two lines each containing three backticks (```); after the first set of backticks, include {r}, which consist of a chunk of R code.
 - To omit the code from the final report, add the argument echo = FALSE inside the {r}. 
 - To avoid evaluating a chunk of R code, add the argument eval = FALSE inside the {r}.
 
 ---
 
-# Exploratory data analysis
-
-(0) Open the “SCM-workshop.Rproj”, then the file “/workshop/SCM-workshop_for_participants.Rmd” and load the libraries required
-
-(1) Read the dataset “df.rds” in R
-“df” is a completely fake data set that we have generated for this workshop and it is intended to replicate GP practice level data where some practices received an intervention aimed at reducing hospital utilisation. 
-
-
----
-
-# Which variable is **not** in the data set?
-
-a)  `age`
-
-b)  `gender`
-
-c)  `ethnicity`
-
-
-
----
-
-
-```r
-head(df0) 
-```
-
-```
-##   ccg_name gp_code    fyr fqtr gp_size male edu_3rd age_5 age_15 age_75plus
-## 1      DA1   000FQ 201516   Q1   12773 6221    1587  2132   1653       1096
-## 2      DA1   000FQ 201516   Q2   12727 6195    1581  2103   1646       1103
-## 3      DA1   000FQ 201516   Q3   12700 6178    1577  2096   1624       1122
-## 4      DA1   000FQ 201516   Q4   12656 6142    1569  2092   1599       1122
-## 5      DA1   000FQ 201617   Q1   12671 6160    1570  2100   1585       1116
-## 6      DA1   000FQ 201617   Q2   12692 6160    1572  2111   1575       1116
-##      ch_nb ae_visits
-## 1 146.0000       416
-## 2 146.3333       403
-## 3 146.3333       395
-## 4 142.0000       402
-## 5 144.0000       421
-## 6 135.6667       402
-```
-
-
----
-# The logic behind the synthetic control method (SCM)
+# The logic behind the Synthetic Control Method (SCM)
 
 Suppose we have a single unit which has undergone an intervention (treated unit) and some similar units that have not (control units). The SCM using a weighted average of the control units to create a synthetic control. 
 
