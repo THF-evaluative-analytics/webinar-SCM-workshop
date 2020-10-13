@@ -123,12 +123,13 @@ This means that:
 R Markdown is a file format for making dynamic documents with R and it contains chunks of embedded R code.
 - You can knit the file and you can convert the file into an HTML, PDF, or Microsoft Word file.
 - Use one hashtag, #, to create a header or two, ##, to create a second level header, and so on.
+- To embed a chunk of R code, surround it with two lines each containing three backticks (```); after the first set of backticks, include {r}, which consist of a chunk of R code.
 - To omit the code from the final report, add the argument echo = FALSE inside the {r}. 
 - To avoid evaluating a chunk of R code, add the argument eval = FALSE inside the {r}.
 
 ---
 
-# The logic behind the synthetic control method (SCM)
+# The logic behind the Synthetic Control Method (SCM)
 
 Suppose we have a single unit which has undergone an intervention (treated unit) and some similar units that have not (control units). The SCM using a weighted average of the control units to create a synthetic control. 
 
